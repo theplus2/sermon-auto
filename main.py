@@ -31,11 +31,61 @@ console = Console()
     default=None,
     help='설교 예정일 (예: "2026-02-23"). 미입력 시 다음 주일 자동 설정.',
 )
-def main(bible_range: str | None, sermon_date: str | None) -> None:
+@click.option(
+    "--context", "sermon_context",
+    type=str,
+    default=None,
+    help=(
+        '이번 주 성도들의 삶의 상황·교회 분위기 (선택). '
+        '예: "새가족 환영회 후, 성도들이 직장 스트레스를 나눔" '
+        '→ 서론 Hook과 대지 3 적용이 이 상황에 맞게 작성됩니다.'
+    ),
+)
+@click.option(
+    "--tone", "sermon_tone",
+    type=click.Choice(["도전", "위로", "교육", "일상"], case_sensitive=False),
+    default="일상",
+    show_default=True,
+    help=(
+        '설교 전체 어조 선택.\n'
+        '  도전: 강한 회개/결단 촉구\n'
+        '  위로: 부드러운 은혜/공감\n'
+        '  교육: 원어 분석 중심\n'
+        '  일상: 생활 밀착형 대화체 (기본값)'
+    ),
+)
+@click.option(
+    "--duration", "sermon_duration",
+    type=click.Choice(["15", "30", "40", "60"]),
+    default="40",
+    show_default=True,
+    help=(
+        '설교 예상 시간(분). '
+        '15=새벽기도/수요예배, 30=짧은 주일설교, 40=주일설교(기본), 60=특별집회'
+    ),
+)
+def main(
+    bible_range: str | None,
+    sermon_date: str | None,
+    sermon_context: str | None,
+    sermon_tone: str,
+    sermon_duration: str,
+) -> None:
     """🔖 설교 작성 자동화 시스템 (Sermon Auto v1.0)
 
     성경 범위와 설교 예정일을 입력하면 Phase 1~5를 자동으로 실행하여
     완성된 설교 원고를 Word 파일로 출력합니다.
+
+    \b
+    [사용 예시]
+    python main.py                                      # 대화형 모드
+    python main.py --range "에스겔 36장" --date 2026-03-01
+    python main.py --range "요한복음 3장" --tone 위로 --duration 30
+    python main.py --range "로마서 8장" --context "이번 주 교인이 많이 힘들어함"
+
+    \b
+    [명령어 전체 목록 확인]
+    python main.py --help
     """
 
     # ── 헤더 출력 ──
@@ -99,13 +149,22 @@ def main(bible_range: str | None, sermon_date: str | None) -> None:
     console.print()
     console.print(f"📖 [bold]{bible_range}[/bold] 범위로 설교를 준비합니다...")
     console.print(f"📅 설교 예정일: [bold]{sermon_date_str}[/bold]")
+    console.print(f"🎙️  설교 톤: [bold]{sermon_tone}[/bold]  ⏱️ 예상 시간: [bold]{sermon_duration}분[/bold]")
+    if sermon_context:
+        console.print(f"📌 이번 주 상황: [italic]{sermon_context}[/italic]")
     console.print("[dim]Phase 1→2→3→4→5 완전 자동 실행 모드[/dim]")
     console.print()
 
     pipeline = SermonPipeline()
 
     try:
-        results = pipeline.run(bible_range, sermon_date_str)
+        results = pipeline.run(
+            bible_range,
+            sermon_date_str,
+            sermon_context=sermon_context,
+            sermon_tone=sermon_tone,
+            sermon_duration=sermon_duration,
+        )
     except Exception as e:
         console.print(f"\n[bold red]❌ 오류 발생:[/bold red] {e}")
         console.print("[dim]API 키를 확인하거나 네트워크 연결을 점검해주세요.[/dim]")

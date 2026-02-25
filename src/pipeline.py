@@ -105,12 +105,22 @@ class SermonPipeline:
 
         return result
 
-    def run(self, bible_range: str, sermon_date: str = "") -> dict[str, str]:
+    def run(
+        self,
+        bible_range: str,
+        sermon_date: str = "",
+        sermon_context: str | None = None,
+        sermon_tone: str = "일상",
+        sermon_duration: str = "40",
+    ) -> dict[str, str]:
         """전체 파이프라인을 실행합니다.
 
         Args:
-            bible_range: 사용자가 입력한 성경 범위. 예: "에스겔 36-37장"
-            sermon_date: 설교 예정일. 예: "2026년 02월 23일"
+            bible_range:     사용자가 입력한 성경 범위. 예: "에스겔 36-37장"
+            sermon_date:     설교 예정일. 예: "2026년 02월 23일"
+            sermon_context:  이번 주 성도들의 삶의 상황·교회 분위기 (선택)
+            sermon_tone:     설교 어조. 도전/위로/교육/일상 중 택일
+            sermon_duration: 설교 예상 시간(분). '15'/'30'/'40'/'60'
 
         Returns:
             각 Phase의 결과를 담은 딕셔너리.
@@ -146,7 +156,7 @@ class SermonPipeline:
             phase_num=1,
             phase_name="본문 선정 및 주제 개발",
             system_prompt=PHASE1_SYSTEM,
-            user_prompt=get_phase1_prompt(bible_range),
+            user_prompt=get_phase1_prompt(bible_range, sermon_context),
             filename=f"{timestamp}_phase1_본문선정.md",
         )
         self.results["phase1"] = phase1
@@ -156,7 +166,7 @@ class SermonPipeline:
             phase_num=2,
             phase_name="설교 개요 상세화",
             system_prompt=PHASE2_SYSTEM,
-            user_prompt=get_phase2_prompt(phase1),
+            user_prompt=get_phase2_prompt(phase1, sermon_duration),
             filename=f"{timestamp}_phase2_개요.md",
         )
         self.results["phase2"] = phase2
@@ -176,7 +186,7 @@ class SermonPipeline:
             phase_num=4,
             phase_name="설교문 원고 작성",
             system_prompt=PHASE4_SYSTEM,
-            user_prompt=get_phase4_prompt(phase2, phase3),
+            user_prompt=get_phase4_prompt(phase2, phase3, sermon_context, sermon_tone, sermon_duration),
             filename=f"{timestamp}_phase4_원고.md",
         )
         self.results["phase4"] = phase4

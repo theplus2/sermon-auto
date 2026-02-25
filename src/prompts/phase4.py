@@ -113,16 +113,43 @@ Phase 3의 피드백은 **참고 자료**로 활용하되, 원고에 직접 인�
 """
 
 
-def get_phase4_prompt(phase2_result: str, phase3_result: str) -> str:
+def get_phase4_prompt(
+    phase2_result: str,
+    phase3_result: str,
+    sermon_context: str | None = None,
+    sermon_tone: str = "일상",
+    sermon_duration: str = "40",
+) -> str:
     """Phase 4 사용자 프롬프트를 생성합니다.
 
     Args:
-        phase2_result: Phase 2에서 생성된 설교 개요 전문.
-        phase3_result: Phase 3에서 생성된 피드백 보고서 전문.
+        phase2_result:   Phase 2에서 생성된 설교 개요 전문.
+        phase3_result:   Phase 3에서 생성된 피드백 보고서 전문.
+        sermon_context:  이번 주 성도들의 삶의 상황 (선택)
+        sermon_tone:     설교 어조. 도전/위로/교육/일상
+        sermon_duration: 설교 예상 시간(분).
 
     Returns:
         Gemini에 보낼 사용자 프롬프트 문자열.
     """
+    # 톤별 추가 지침
+    tone_guide = {
+        "도전": "강한 회개와 결단의 촉구를 전면에 내세우세요. 죄의 심각성과 변화의 긴박함이 느껴져야 합니다.",
+        "위로": "부드럽고 따뜻한 어조로 은혜와 공감을 중심에 두세요. 상처 입은 마음을 어루만지는 방식으로 작성하세요.",
+        "교육": "원어 분석과 신학적 깊이를 강조하세요. 논리적 흐름과 배움의 즐거움이 느껴지도록 구성하세요.",
+        "일상": "생활 밀착형 대화체로 작성하세요. 출퇴근, 직장, 가정 등 한국 성도의 Monday morning 삶과 연결하세요.",
+    }
+    active_tone_guide = tone_guide.get(sermon_tone, tone_guide["일상"])
+
+    # 이번 주 상황 블록
+    context_block = ""
+    if sermon_context:
+        context_block = f"""
+📌 이번 주 성도들의 삶의 상황:
+{sermon_context}
+→ 서론 Hook과 대지 3 적용에 위 상황을 자연스럽게 반영하여 '우리 이야기'처럼 느껴지게 하세요.
+"""
+
     return f"""
 다음은 Phase 2의 설교 개요와 Phase 3의 피드백 보고서입니다.
 이 모든 내용을 반영하여 완성도 높은 설교 원고를 작성해주세요.
@@ -135,11 +162,16 @@ def get_phase4_prompt(phase2_result: str, phase3_result: str) -> str:
 {phase3_result}
 =================================
 
+🎙️ 설교 어조: **{sermon_tone}** — {active_tone_guide}
+⏱️ 총 분량: **{sermon_duration}분** 기준으로 원고 분량을 조절할 것
+{context_block}
 반드시 다음을 포함하세요:
 1. Phase 3의 피드백을 **참고하여** 약점을 보완하되, 피드백에 답변하는 형식이 아닌 자연스러운 설교 원고로 작성
 2. 페르소나 이름(지혜, 준서, 민수, 수진)을 원고에 절대 언급하지 않기
 3. 브릿지 언어 적극 활용 (신학 용어 + 일상 언어 병기)
-4. 30-40분 분량의 풍성한 원고
-5. 완성된 기도문
-6. 5대 핵심 질문 자가 점검 결과
+4. 예화는 **한국의 일상적 생활 장면** 중심으로 (출퇴근길, 직장, 자녀 양육, 이웃 관계 등 구체적 장면 묘사)
+5. 작은 행동은 WHEN(언제) + WHERE(어디서) + WHAT(무엇을) 한 문장으로 제시
+6. {sermon_duration}분 기준에 맞는 원고 분량
+7. 완성된 기도문
+8. 5대 핵심 질문 자가 점검 결과
 """
