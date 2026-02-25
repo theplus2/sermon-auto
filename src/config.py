@@ -30,6 +30,9 @@ TEMPERATURE: float = 0.7
 # 출력 디렉토리
 OUTPUT_DIR: Path = Path(__file__).parent.parent / "output"
 
+# 피드백 디렉토리 (목사님이 설교 후 남기는 피드백 저장)
+FEEDBACK_DIR: Path = Path(__file__).parent.parent / "feedback"
+
 
 def validate_config() -> None:
     """필수 설정값이 올바르게 입력되었는지 검증합니다."""

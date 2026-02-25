@@ -64,12 +64,24 @@ console = Console()
         '15=새벽기도/수요예배, 30=짧은 주일설교, 40=주일설교(기본), 60=특별집회'
     ),
 )
+@click.option(
+    "--audience", "sermon_audience",
+    type=click.Choice(["일반", "어르신", "청소년", "새신자전용"], case_sensitive=False),
+    default="일반",
+    show_default=True,
+    help=(
+        '대상 청중 선택. '
+        '일반(기본), 어르신(신상하고 온유한 어조), '
+        '청소년(정체성/미래 중심), 새신자전용(용어 주석 없는 쉬운 문장)'
+    ),
+)
 def main(
     bible_range: str | None,
     sermon_date: str | None,
     sermon_context: str | None,
     sermon_tone: str,
     sermon_duration: str,
+    sermon_audience: str,
 ) -> None:
     """🔖 설교 작성 자동화 시스템 (Sermon Auto v1.0)
 
@@ -82,6 +94,8 @@ def main(
     python main.py --range "에스겔 36장" --date 2026-03-01
     python main.py --range "요한복음 3장" --tone 위로 --duration 30
     python main.py --range "로마서 8장" --context "이번 주 교인이 많이 힘들어함"
+    python main.py --range "시편 23편" --tone 위로 --duration 15 --audience 어르신
+    python main.py --range "요한복음 3스" --audience 새신자전용 --tone 일상
 
     \b
     [명령어 전체 목록 확인]
@@ -149,7 +163,7 @@ def main(
     console.print()
     console.print(f"📖 [bold]{bible_range}[/bold] 범위로 설교를 준비합니다...")
     console.print(f"📅 설교 예정일: [bold]{sermon_date_str}[/bold]")
-    console.print(f"🎙️  설교 톤: [bold]{sermon_tone}[/bold]  ⏱️ 예상 시간: [bold]{sermon_duration}분[/bold]")
+    console.print(f"🎙️  설교 톤: [bold]{sermon_tone}[/bold]  ⏱️ 예상 시간: [bold]{sermon_duration}분[/bold]  👥 청중: [bold]{sermon_audience}[/bold]")
     if sermon_context:
         console.print(f"📌 이번 주 상황: [italic]{sermon_context}[/italic]")
     console.print("[dim]Phase 1→2→3→4→5 완전 자동 실행 모드[/dim]")
@@ -164,6 +178,7 @@ def main(
             sermon_context=sermon_context,
             sermon_tone=sermon_tone,
             sermon_duration=sermon_duration,
+            sermon_audience=sermon_audience,
         )
     except Exception as e:
         console.print(f"\n[bold red]❌ 오류 발생:[/bold red] {e}")

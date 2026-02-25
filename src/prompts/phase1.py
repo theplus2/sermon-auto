@@ -83,12 +83,17 @@ PHASE1_SYSTEM = BASE_SYSTEM_PROMPT + """
 """
 
 
-def get_phase1_prompt(bible_range: str, sermon_context: str | None = None) -> str:
+def get_phase1_prompt(
+    bible_range: str,
+    sermon_context: str | None = None,
+    sermon_history: str = "",
+) -> str:
     """Phase 1 사용자 프롬프트를 생성합니다.
 
     Args:
-        bible_range:    사용자가 입력한 성경 범위. 예: "에스겔 36-37장"
-        sermon_context: 이번 주 성도들의 삶의 상황\u00b7교회 분위기 (선택)
+        bible_range:    사용자가 입력한 성경 범위.
+        sermon_context: 이번 주 성도들의 삶의 상황 (선택)
+        sermon_history: 최근 설교 이력 요약 (7순위 히스토리 참조)
 
     Returns:
         Gemini에 보낼 사용자 프롬프트 문자열.
@@ -101,9 +106,10 @@ def get_phase1_prompt(bible_range: str, sermon_context: str | None = None) -> st
 
 → 위 상황을 고려하여, '3. 현대적 적실성' 평가 시 해당 문맥에 가장 잘 연결되는 본문을 우대하세요.
 """
+    history_block = f"\n{sermon_history}" if sermon_history else ""
     return f"""
 다음 성경 범위에서 설교할 최적의 본문을 선정하고 주제를 개발해주세요.
-{context_block}
+{context_block}{history_block}
 📖 성경 범위: {bible_range}
 
 위에 제시된 출력 형식을 정확히 따라 작성해주세요.

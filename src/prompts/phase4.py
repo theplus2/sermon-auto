@@ -120,6 +120,8 @@ def get_phase4_prompt(
     sermon_context: str | None = None,
     sermon_tone: str = "일상",
     sermon_duration: str = "40",
+    sermon_audience: str = "일반",
+    sermon_feedback: str = "",
 ) -> str:
     """Phase 4 사용자 프롬프트를 생성합니다.
 
@@ -129,6 +131,8 @@ def get_phase4_prompt(
         sermon_context:  이번 주 성도들의 삶의 상황 (선택)
         sermon_tone:     설교 어조. 도전/위로/교육/일상
         sermon_duration: 설교 예상 시간(분).
+        sermon_audience: 대상 청중. 일반/어르신/청소년/새신자전용
+        sermon_feedback: 목사님 스타일 선호도 피드백 (8순위)
 
     Returns:
         Gemini에 보낼 사용자 프롬프트 문자열.
@@ -151,6 +155,19 @@ def get_phase4_prompt(
 → 서론 Hook과 대지 3 적용에 위 상황을 자연스럽게 반영하여 '우리 이야기'처럼 느껴지게 하세요.
 """
 
+    # 청중별 추가 지침
+    audience_guide = {
+        "일반": "",  # 괰별 없음
+        "어르신": "어른 신자들을 대상으로 합니다. 문장을 짧고 알기 쉽게, 한자어나 영어 외래어는 사용하지 마세요. 서준한 정서와 온유함 있는 팼조를 사용하세요.",
+        "청소년": "청소년들을 대상으로 합니다. 자신감, 정체성, 미래에 대한 고자가 많는 나이대입니다. 그들의 세계치법과 SNS 보앙 문화를 여멸야 공감합니다. 진정성 있고 도전적인 만음으로 접근하세요.",
+        "새신자전용": "신앙 초보자를 대상으로 합니다. 맨 처음 듣는 사쿨이라 생각하고 주세요. 신학 용어는 반드시 일상 언어로 설명하고, 예화는 교회 체험 없이도 이해할 수 있는 대화체로 작성하세요.",
+    }
+    audience_hint = audience_guide.get(sermon_audience, "")
+    audience_block = f"\n👥 대상 청중: **{sermon_audience}** — {audience_hint}\n" if audience_hint else ""
+
+    # 목사님 피드백 블록
+    feedback_block = f"\n{sermon_feedback}" if sermon_feedback else ""
+
     return f"""
 다음은 Phase 2의 설교 개요와 Phase 3의 피드백 보고서입니다.
 이 모든 내용을 반영하여 완성도 높은 설교 원고를 작성해주세요.
@@ -164,8 +181,8 @@ def get_phase4_prompt(
 =================================
 
 🎙️ 설교 어조: **{sermon_tone}** — {active_tone_guide}
-⏱️ 총 분량: **{sermon_duration}분** 기준으로 원고 분량을 조절할 것
-{context_block}
+⏱️ 완성 분량: **{sermon_duration}분** 기준으로 원고 분량을 조절할 것
+{audience_block}{context_block}{feedback_block}
 반드시 다음을 포함하세요:
 1. Phase 3의 피드백을 **참고하여** 약점을 보완하되, 피드백에 답변하는 형식이 아닌 자연스러운 설교 원고로 작성
 2. 페르소나 이름(지혜, 준서, 민수, 수진)을 원고에 절대 언급하지 않기

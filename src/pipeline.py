@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from src.api_client import GeminiClient
-from src.config import OUTPUT_DIR
+from src.config import OUTPUT_DIR, FEEDBACK_DIR
 from src.prompts.phase1 import PHASE1_SYSTEM, get_phase1_prompt
 from src.prompts.phase2 import PHASE2_SYSTEM, get_phase2_prompt
 from src.prompts.phase3 import PHASE3_SYSTEM, get_phase3_prompt
@@ -36,13 +36,86 @@ class SermonPipeline:
         self.client = GeminiClient()
         self.results: dict[str, str] = {}
         self.output_dir: Path = OUTPUT_DIR
-        # 설교 예정일 기준 하위 폴더 (run() 호출 시 설정됨)
         self.date_dir: Path = OUTPUT_DIR
         self._ensure_output_dir()
+        FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
 
     def _ensure_output_dir(self) -> None:
         """출력 디렉토리가 없으면 생성합니다."""
         self.output_dir.mkdir(parents=True, exist_ok=True)
+
+    def _load_sermon_history(self, max_count: int = 10) -> str:
+        """이전 설교들의 제목과 핵심 키워드를 읽어 중복 방지 힌트를 생성합니다.
+
+        output/ 하위 폴더에서 phase1_*.md 파일을 최신순으로 읽어
+        선정된 본문과 주제를 추출합니다. (최대 max_count개)
+
+        Returns:
+            이전 설교 목록 요약 문자열. 없으면 빈 문자열.
+        """
+        history_files = sorted(
+            self.output_dir.rglob("*phase1_본문선정.md"),
+            key=lambda f: f.stat().st_mtime,
+            reverse=True,
+        )[:max_count]
+
+        if not history_files:
+            return ""
+
+        summaries: list[str] = []
+        for i, f in enumerate(history_files, 1):
+            try:
+                text = f.read_text(encoding="utf-8")
+                # 선정 본문·주제 줄 추출 (첫 30줄만 스캔)
+                lines = text.splitlines()[:30]
+                relevant = [
+                    line.strip() for line in lines
+                    if any(kw in line for kw in ["선정 본문", "추천 주제", "선정 이유", "📌", "📖"])
+                ]
+                if relevant:
+                    summaries.append(f"{i}. " + " / ".join(relevant[:3]))
+            except Exception:
+                continue
+
+        if not summaries:
+            return ""
+
+        return (
+            "📚 최근 설교 이력 (주제 중복 방지 참고용):\n"
+            + "\n".join(summaries)
+            + "\n→ 위 설교에서 다룬 본문이나 주제와 겹치지 않도록 새로운 관점을 우선 선택하세요.\n"
+        )
+
+    def _load_feedback(self) -> str:
+        """feedback/ 폴더의 모든 .md 파일을 읽어 피드백 요약을 반환합니다.
+
+        목사님이 feedback/ 폴더에 마크다운 파일(.md)을 작성해두면
+        다음 설교 작성 시 AI가 해당 선호도를 자동으로 반영합니다.
+
+        Returns:
+            피드백 내용 문자열. 없으면 빈 문자열.
+        """
+        feedback_files = sorted(FEEDBACK_DIR.glob("*.md"))
+        if not feedback_files:
+            return ""
+
+        contents: list[str] = []
+        for f in feedback_files:
+            try:
+                text = f.read_text(encoding="utf-8").strip()
+                if text:
+                    contents.append(f"[{f.name}]\n{text}")
+            except Exception:
+                continue
+
+        if not contents:
+            return ""
+
+        return (
+            "📝 목사님 스타일 선호도 피드백:\n"
+            + "\n\n".join(contents)
+            + "\n→ 위 피드백을 반영하여 설교 원고의 스타일과 구성을 조정하세요.\n"
+        )
 
     def _save_result(self, filename: str, content: str) -> Path:
         """Phase 결과를 마크다운 파일로 저장합니다.
@@ -112,23 +185,24 @@ class SermonPipeline:
         sermon_context: str | None = None,
         sermon_tone: str = "일상",
         sermon_duration: str = "40",
+        sermon_audience: str = "일반",
     ) -> dict[str, str]:
         """전체 파이프라인을 실행합니다.
 
         Args:
-            bible_range:     사용자가 입력한 성경 범위. 예: "에스겔 36-37장"
-            sermon_date:     설교 예정일. 예: "2026년 02월 23일"
-            sermon_context:  이번 주 성도들의 삶의 상황·교회 분위기 (선택)
+            bible_range:     사용자가 입력한 성경 범위.
+            sermon_date:     설교 예정일.
+            sermon_context:  이번 주 성도들의 삶의 상황 (선택)
             sermon_tone:     설교 어조. 도전/위로/교육/일상 중 택일
             sermon_duration: 설교 예상 시간(분). '15'/'30'/'40'/'60'
+            sermon_audience: 대상 청중. 일반/어르신/청소년/새신자전용 중 택일
 
         Returns:
             각 Phase의 결과를 담은 딕셔너리.
-            키: "phase1", "phase2", ..., "phase5"
         """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
-        # 설교 예정일 기준으로 하위 폴더 생성 (예: output/2026 0302/)
+        # 설교 예정일 기준으로 하위 폴더 생성
         if sermon_date:
             try:
                 parsed = datetime.strptime(sermon_date, "%Y년 %m월 %d일")
@@ -138,6 +212,17 @@ class SermonPipeline:
         else:
             self.date_dir = self.output_dir / datetime.now().strftime("%Y %m%d")
         self.date_dir.mkdir(parents=True, exist_ok=True)
+
+        # ── 7순위: 이전 설교 히스토리 로드 ──
+        sermon_history = self._load_sermon_history()
+        if sermon_history:
+            console.print(f"  📚 이전 설교 히스토리 확인 완료 ({len(sermon_history.splitlines())}줄)")
+
+        # ── 8순위: 피드백 로드 ──
+        sermon_feedback = self._load_feedback()
+        if sermon_feedback:
+            feedback_count = len(list(FEEDBACK_DIR.glob("*.md")))
+            console.print(f"  📝 목사님 피드백 {feedback_count}파일 적용 중")
 
         console.print()
         console.print(
@@ -156,7 +241,7 @@ class SermonPipeline:
             phase_num=1,
             phase_name="본문 선정 및 주제 개발",
             system_prompt=PHASE1_SYSTEM,
-            user_prompt=get_phase1_prompt(bible_range, sermon_context),
+            user_prompt=get_phase1_prompt(bible_range, sermon_context, sermon_history),
             filename=f"{timestamp}_phase1_본문선정.md",
         )
         self.results["phase1"] = phase1
@@ -186,7 +271,11 @@ class SermonPipeline:
             phase_num=4,
             phase_name="설교문 원고 작성",
             system_prompt=PHASE4_SYSTEM,
-            user_prompt=get_phase4_prompt(phase2, phase3, sermon_context, sermon_tone, sermon_duration),
+            user_prompt=get_phase4_prompt(
+                phase2, phase3,
+                sermon_context, sermon_tone, sermon_duration,
+                sermon_audience, sermon_feedback,
+            ),
             filename=f"{timestamp}_phase4_원고.md",
         )
         self.results["phase4"] = phase4
