@@ -2,23 +2,41 @@
 설교 자동화 시스템 - CLI 엔트리포인트
 
 사용법:
-    python main.py                           # 대화형 모드 (성경 범위를 입력)
-    python main.py --range "에스겔 36-37장"  # 직접 성경 범위 지정
+    python main.py generate                        # 대화형 모드
+    python main.py generate --range "에스겔 36장"   # 설교 생성
+    python main.py feedback                        # 설교 후 피드백 수집
 """
 
 import click
 from datetime import datetime, timedelta
+from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
+from rich.prompt import Prompt, Confirm
 
-from src.config import validate_config, OUTPUT_DIR
+from src.config import validate_config, OUTPUT_DIR, FEEDBACK_DIR
 from src.pipeline import SermonPipeline
 from src.exporter import SermonExporter
 
 console = Console()
 
 
-@click.command()
+@click.group(invoke_without_command=True)
+@click.pass_context
+def cli(ctx: click.Context) -> None:
+    """🔖 설교 작성 자동화 시스템 (Sermon Auto v1.0)
+
+    \b
+    [명령어 목록]
+    python main.py generate   — 설교 원고 생성
+    python main.py feedback   — 설교 후 피드백 수집
+    python main.py --help     — 도움말 보기
+    """
+    if ctx.invoked_subcommand is None:
+        click.echo(ctx.get_help())
+
+
+@cli.command(name="generate")
 @click.option(
     "--range", "bible_range",
     type=str,
@@ -47,21 +65,19 @@ console = Console()
     default="일상",
     show_default=True,
     help=(
-        '설교 전체 어조 선택.\n'
-        '  도전: 강한 회개/결단 촉구\n'
-        '  위로: 부드러운 은혜/공감\n'
-        '  교육: 원어 분석 중심\n'
-        '  일상: 생활 밀착형 대화체 (기본값)'
+        '설교 전체 어조 선택. '
+        '도전: 강한 회개/결단 촉구 | 위로: 부드러운 은혜/공감 | '
+        '교육: 원어 분석 중심 | 일상: 생활 밀착형 대화체 (기본값)'
     ),
 )
 @click.option(
     "--duration", "sermon_duration",
     type=click.Choice(["15", "30", "40", "60"]),
-    default="40",
+    default="30",
     show_default=True,
     help=(
         '설교 예상 시간(분). '
-        '15=새벽기도/수요예배, 30=짧은 주일설교, 40=주일설교(기본), 60=특별집회'
+        '15=새벽기도/수요예배, 30=주일설교(기본), 40=길게 보는 주일설교, 60=특별집회'
     ),
 )
 @click.option(
@@ -71,8 +87,8 @@ console = Console()
     show_default=True,
     help=(
         '대상 청중 선택. '
-        '일반(기본), 어르신(신상하고 온유한 어조), '
-        '청소년(정체성/미래 중심), 새신자전용(용어 주석 없는 쉬운 문장)'
+        '일반(기본), 어르신(온유한 어조), '
+        '청소년(정체성/미래 중심), 새신자전용(쉽고 짧은 문장)'
     ),
 )
 def main(
@@ -83,23 +99,15 @@ def main(
     sermon_duration: str,
     sermon_audience: str,
 ) -> None:
-    """🔖 설교 작성 자동화 시스템 (Sermon Auto v1.0)
-
-    성경 범위와 설교 예정일을 입력하면 Phase 1~5를 자동으로 실행하여
-    완성된 설교 원고를 Word 파일로 출력합니다.
+    """📖 설교 원고 생성
 
     \b
     [사용 예시]
-    python main.py                                      # 대화형 모드
-    python main.py --range "에스겔 36장" --date 2026-03-01
-    python main.py --range "요한복음 3장" --tone 위로 --duration 30
-    python main.py --range "로마서 8장" --context "이번 주 교인이 많이 힘들어함"
-    python main.py --range "시편 23편" --tone 위로 --duration 15 --audience 어르신
-    python main.py --range "요한복음 3스" --audience 새신자전용 --tone 일상
-
-    \b
-    [명령어 전체 목록 확인]
-    python main.py --help
+    python main.py generate
+    python main.py generate --range "에스겔 36장" --date 2026-03-01
+    python main.py generate --range "요한복음 3장" --tone 위로 --duration 30
+    python main.py generate --range "시편 23편" --audience 어르신 --duration 15
+    python main.py generate --range "로마서 8장" --context "이번 주 교인이 힘들어함"
     """
 
     # ── 헤더 출력 ──
@@ -212,5 +220,84 @@ def main(
     )
 
 
+@cli.command(name="feedback")
+def feedback_cmd() -> None:
+    """📝 설교 후 피드백 수집 (대화형)
+
+    \b
+    [사용법]
+    python main.py feedback
+
+    몇 가지 질문에 답하면 피드백이 feedback/ 폴더에 자동 저장됩니다.
+    다음 설교 생성 시 AI가 자동으로 읽고 스타일에 반영합니다.
+    """
+    FEEDBACK_DIR.mkdir(parents=True, exist_ok=True)
+
+    console.print()
+    console.print(
+        Panel(
+            "[bold yellow]📝 설교 피드백 수집[/bold yellow]\n"
+            "[dim]답변하신 내용은 feedback/ 폴더에 저장되어\n"
+            "다음 설교 작성 시 AI가 자동으로 반영합니다.[/dim]",
+            title="[bold]Sermon Auto — 피드백[/bold]",
+            width=60,
+        )
+    )
+    console.print()
+
+    # Step 1: 대상 설교 날짜
+    console.print("[bold cyan]①  어느 설교에 대한 피드백인가요?[/bold cyan]")
+    console.print("[dim]   예: 2026-03-02  (미입력 시 오늘 날짜로 설정)[/dim]")
+    feedback_date_raw = click.prompt("   날짜 (YYYY-MM-DD)", default=datetime.now().strftime("%Y-%m-%d"))
+    try:
+        feedback_date = datetime.strptime(feedback_date_raw.strip(), "%Y-%m-%d").strftime("%Y-%m-%d")
+    except ValueError:
+        console.print("[red]❌ 날짜 형식이 올바르지 않습니다. YYYY-MM-DD 형식으로 입력해주세요.[/red]")
+        return
+
+    lines: list[str] = [
+        f"# 피드백 — {feedback_date} 설교",
+        f"_작성일: {datetime.now().strftime('%Y-%m-%d %H:%M')}_",
+        "",
+    ]
+
+    # Step 2: 질문세트 정의
+    questions = [
+        ("②", "이번 설교에서 가장 잘 맞은 부분은 무엇인가요? (유지하고 싶은 것)", "잘 된 부분"),
+        ("③", "다음엔 더 나아졌으면 하는 대목이 있나요? (예: 서론이 너무 길었다, 예화가 어색했다)", "개선할 점"),
+        ("④", "예화나 비유 중 성도들이 가장 공감한 것은 무엇이었나요?", "좋았던 예화 유형"),
+        ("⑤", "피하고 싶은 예화 유형이 있나요? (없으면 Enter)", "피하고 싶은 예화"),
+        ("⑥", "설교 분량에 대한 의견을 주세요. (예: 결론이 짧았다, 다음에는 30분으로 하고 싶다)", "분량 고려사항"),
+        ("⑦", "신학적으로 더 강조했다면 좋았을 부분이 있나요? (없으면 Enter)", "신학적 강조점"),
+        ("⑧", "기타 자유롭게 나누고 싶은 의견을 적어주세요. (없으면 Enter)", "기타"),
+    ]
+
+    console.print()
+    for icon, question, label in questions:
+        console.print(f"[bold cyan]{icon}  {question}[/bold cyan]")
+        answer = click.prompt("   답변", default="", show_default=False)
+        answer = answer.strip()
+        lines.append(f"## {label}")
+        lines.append(answer if answer else "(특별 의견 없음)")
+        lines.append("")
+        console.print()
+
+    # Step 3: 파일 저장
+    filename = f"{feedback_date}_피드백.md"
+    filepath = FEEDBACK_DIR / filename
+    filepath.write_text("\n".join(lines), encoding="utf-8")
+
+    console.print(
+        Panel(
+            f"[bold green]✅ 피드백이 저장되었습니다![/bold green]\n\n"
+            f"📂 저장 위치: [cyan]{filepath}[/cyan]\n\n"
+            "[dim]다음에 'python main.py generate ...' 를 실행하면\n"
+            "AI가 이 피드백을 자동으로 반영합니다.[/dim]",
+            title="[bold]피드백 완료[/bold]",
+            width=60,
+        )
+    )
+
+
 if __name__ == "__main__":
-    main()
+    cli()
